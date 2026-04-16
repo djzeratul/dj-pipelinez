@@ -12,8 +12,8 @@ MODEL_NAME="${MODEL_NAME:-realesrgan-x4plus}"
 TILE_SIZE="${TILE_SIZE:-512}"
 TARGET_WIDTH="${TARGET_WIDTH:-3840}"
 TARGET_HEIGHT="${TARGET_HEIGHT:-2160}"
-CRF="${CRF:-17}"
-PRESET="${PRESET:-slow}"
+CQ="${CQ:-18}"
+PRESET="${PRESET:-p5}"
 
 BIN="/opt/realesrgan/realesrgan-ncnn-vulkan"
 
@@ -76,9 +76,9 @@ ffmpeg -hide_banner -y \
   -i "$INPUT" \
   -map 0:v:0 \
   -map 1:a? \
-  -c:v libx264 \
+  -c:v h264_nvenc \
   -preset "$PRESET" \
-  -crf "$CRF" \
+  -cq "$CQ" \
   -pix_fmt yuv420p \
   -vf "scale=${TARGET_WIDTH}:${TARGET_HEIGHT}:force_original_aspect_ratio=decrease,pad=${TARGET_WIDTH}:${TARGET_HEIGHT}:(ow-iw)/2:(oh-ih)/2" \
   -c:a copy \

@@ -22,8 +22,8 @@ services:
       TARGET_HEIGHT: "2160"
 
       # Encoding knobs
-      CRF: "17"
-      PRESET: "slow"
+      CQ: "18"
+      PRESET: "p5"
 
     deploy:
       resources:
