@@ -4,7 +4,6 @@ services:
     container_name: dj-pipelinez
     restart: unless-stopped
     runtime: nvidia
-    gpus: all
 
     environment:
       NVIDIA_VISIBLE_DEVICES: all
@@ -29,4 +28,3 @@ services:
       - /mnt/leviathan/data/upscale/failed:/watch/failed
       - /mnt/leviathan/data/upscale/work:/watch/work
       - ./state:/state
-      - /usr/share/vulkan/icd.d/nvidia_icd.json:/usr/share/vulkan/icd.d/nvidia_icd.json:ro
