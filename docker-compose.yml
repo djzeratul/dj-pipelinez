@@ -1,0 +1,41 @@
+services:
+  dj-pipelinez:
+    build: .
+    container_name: dj-pipelinez
+    restart: unless-stopped
+
+    environment:
+      NVIDIA_VISIBLE_DEVICES: all
+      NVIDIA_DRIVER_CAPABILITIES: compute,video,utility,graphics
+
+      WATCH_DIR: /watch/incoming
+      OUTPUT_DIR: /watch/outgoing
+      FAILED_DIR: /watch/failed
+      WORK_DIR: /watch/work
+
+      MODEL_NAME: realesrgan-x4plus
+      TILE_SIZE: "512"
+      POLL_INTERVAL: "5"
+
+      # Export literal UHD, not just 4x dimensions
+      TARGET_WIDTH: "3840"
+      TARGET_HEIGHT: "2160"
+
+      # Encoding knobs
+      CRF: "17"
+      PRESET: "slow"
+
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+
+    volumes:
+      - /mnt/leviathan/data/upscale/incoming:/watch/incoming
+      - /mnt/leviathan/data/upscale/outgoing:/watch/outgoing
+      - /mnt/leviathan/data/upscale/failed:/watch/failed
+      - /mnt/leviathan/data/upscale/work:/watch/work
+      - ./state:/state
