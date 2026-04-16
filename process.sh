@@ -15,7 +15,7 @@ TARGET_HEIGHT="${TARGET_HEIGHT:-2160}"
 CQ="${CQ:-18}"
 PRESET="${PRESET:-p5}"
 
-BIN="/opt/realesrgan/realesrgan-ncnn-vulkan"
+BIN="/opt/realesrgan/realesrgan-ncnn-vulkan-v0.2.0-ubuntu/realesrgan-ncnn-vulkan"
 
 mkdir -p "$OUTPUT_DIR" "$FAILED_DIR" "$WORK_DIR"
 
