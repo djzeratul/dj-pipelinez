@@ -17,10 +17,10 @@ WORKDIR /opt
 
 # Real-ESRGAN ncnn Vulkan binary
 RUN curl -L -o /tmp/realesrgan.zip \
-      https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan/releases/download/v0.2.0/realesrgan-ncnn-vulkan-v0.2.0-ubuntu.zip \
+      https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip \
     && unzip /tmp/realesrgan.zip -d /opt/realesrgan \
     && rm /tmp/realesrgan.zip \
-    && chmod +x /opt/realesrgan/realesrgan-ncnn-vulkan-v0.2.0-ubuntu/realesrgan-ncnn-vulkan
+    && chmod +x /opt/realesrgan/realesrgan-ncnn-vulkan
 
 COPY watch.sh /usr/local/bin/watch.sh
 COPY process.sh /usr/local/bin/process.sh
