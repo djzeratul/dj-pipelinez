@@ -1,88 +1,80 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INPUT="${1:?missing input file}"
+INPUT="${1:?missing input}"
 
-WATCH_DIR="${WATCH_DIR:-/watch/incoming}"
-OUTPUT_DIR="${OUTPUT_DIR:-/watch/outgoing}"
-FAILED_DIR="${FAILED_DIR:-/watch/failed}"
-WORK_DIR="${WORK_DIR:-/watch/work}"
+BASE="$(basename "$INPUT")"
+STEM="${BASE%.*}"
 
-MODEL_NAME="${MODEL_NAME:-realesrgan-x4plus}"
-TILE_SIZE="${TILE_SIZE:-512}"
-TARGET_WIDTH="${TARGET_WIDTH:-3840}"
-TARGET_HEIGHT="${TARGET_HEIGHT:-2160}"
-CQ="${CQ:-18}"
-PRESET="${PRESET:-p5}"
+WORK_ROOT="/mnt/leviathan/data/upscale/work"
+OUT_DIR="/mnt/leviathan/data/upscale/outgoing"
+FAIL_DIR="/mnt/leviathan/data/upscale/failed"
 
-BIN="/opt/realesrgan/realesrgan-ncnn-vulkan"
+REALSR_DIR="/opt/realesrgan-ncnn-vulkan-20220424-ubuntu"
+REALSR="$REALSR_DIR/realesrgan-ncnn-vulkan"
 
-mkdir -p "$OUTPUT_DIR" "$FAILED_DIR" "$WORK_DIR"
+CQ=18
+PRESET="p5"
 
-base="$(basename "$INPUT")"
-stem="${base%.*}"
+TARGET_W=3840
+TARGET_H=2160
 
-lock="/state/${stem}.lock"
-if [[ -e "$lock" ]]; then
-  echo "[worker] lock exists, skipping: $INPUT"
-  exit 0
-fi
-touch "$lock"
+JOBDIR="$(mktemp -d "$WORK_ROOT/${STEM}.XXXX")"
+FRAMES="$JOBDIR/frames"
+UPSCALED="$JOBDIR/upscaled"
 
-jobdir="$(mktemp -d "$WORK_DIR/${stem}.XXXXXX")"
-frames="$jobdir/frames"
-upscaled="$jobdir/upscaled"
-mkdir -p "$frames" "$upscaled"
+mkdir -p "$FRAMES" "$UPSCALED"
 
 cleanup() {
-  rm -f "$lock"
-  rm -rf "$jobdir"
+  rm -rf "$JOBDIR"
 }
 trap cleanup EXIT
 
-echo "[worker] processing: $INPUT"
+echo "[worker] processing $INPUT"
 
-# Probe FPS from source so remux stays sane
-fps="$(ffprobe -v error -select_streams v:0 \
+FPS=$(ffprobe -v error -select_streams v:0 \
   -show_entries stream=r_frame_rate \
-  -of default=noprint_wrappers=1:nokey=1 "$INPUT")"
+  -of default=noprint_wrappers=1:nokey=1 "$INPUT" || echo "30/1")
 
-if [[ -z "$fps" ]]; then
-  fps="30/1"
-fi
-
-# Extract source frames
+# extract frames
 ffmpeg -hide_banner -y \
   -i "$INPUT" \
   -vsync 0 \
-  "$frames/frame_%08d.png"
+  "$FRAMES/frame_%08d.png"
 
-# Upscale frames with Real-ESRGAN
-"$BIN" \
-  -i "$frames" \
-  -o "$upscaled" \
-  -n "$MODEL_NAME" \
-  -s 4 \
-  -t "$TILE_SIZE"
+# upscale
+(
+  cd "$REALSR_DIR"
+  "$REALSR" \
+    -i "$FRAMES" \
+    -o "$UPSCALED" \
+    -n realesrgan-x4plus \
+    -s 4 \
+    -t 512
+)
 
-# Rebuild video, preserve source audio if present, export exact UHD
-# The scale+pad step gives you literal 3840x2160 output.
-tmp_video="$jobdir/${stem}_video.mp4"
-final_video="$OUTPUT_DIR/${stem}_4k.mp4"
+if [[ -z "$(ls -A "$UPSCALED" 2>/dev/null)" ]]; then
+  echo "[worker] upscale failed"
+  mv "$INPUT" "$FAIL_DIR/" 2>/dev/null || true
+  exit 1
+fi
 
+OUT="$OUT_DIR/${STEM}_4k.mp4"
+
+# encode (NVENC)
 ffmpeg -hide_banner -y \
-  -framerate "$fps" \
-  -i "$upscaled/frame_%08d.png" \
+  -framerate "$FPS" \
+  -i "$UPSCALED/frame_%08d.png" \
   -i "$INPUT" \
   -map 0:v:0 \
   -map 1:a? \
-  -c:v h264_nvenc \
+  -c:v hevc_nvenc \
   -preset "$PRESET" \
   -cq "$CQ" \
   -pix_fmt yuv420p \
-  -vf "scale=${TARGET_WIDTH}:${TARGET_HEIGHT}:force_original_aspect_ratio=decrease,pad=${TARGET_WIDTH}:${TARGET_HEIGHT}:(ow-iw)/2:(oh-ih)/2" \
+  -vf "scale=${TARGET_W}:${TARGET_H}:force_original_aspect_ratio=decrease,pad=${TARGET_W}:${TARGET_H}:(ow-iw)/2:(oh-ih)/2" \
   -c:a copy \
   -shortest \
-  "$final_video"
+  "$OUT"
 
-echo "[worker] finished: $final_video"
+echo "[worker] finished → $OUT"

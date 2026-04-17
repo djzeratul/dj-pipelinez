@@ -1,44 +1,36 @@
-# 🎛️ DJ Pipelinez
+# 🎛️ DJ Pipelinez (Host Mode)
 
-Automated AI video upscaling pipeline using Real-ESRGAN + Docker.
+Automated AI video upscaling pipeline using **Real-ESRGAN + ffmpeg (NVENC)** — now running **natively on the host** for maximum GPU compatibility and minimal runtime headaches.
 
-Drop low-res clips into a folder (via SMB or otherwise), and they'll be automatically:
+Drop clips into a folder (via SMB or local), and they’ll be automatically:
 
 * processed
-* upscaled to 4K (3840x2160)
-* exported with original audio preserved
+* AI upscaled
+* exported as **true 4K (3840×2160)**
+* with original audio preserved
 
 ---
 
-## 🧠 Overview
+## 🧠 Why Host Mode?
 
-DJ Pipelinez is a **watch-folder based video processing worker**:
+After testing Docker-based GPU/Vulkan pipelines, it turned out:
 
-```
-incoming/ → [watcher] → [upscale pipeline] → outgoing/
-```
+> GPU/Vulkan + containers = more plumbing than value (for this use case)
 
----
+So this version runs **directly on Leviathan**, which gives:
 
-## ✨ Features
-
-* 📂 Watch-folder automation (no manual triggering)
-* ⚡ GPU-accelerated upscaling (Real-ESRGAN ncnn Vulkan)
-* 🎬 Frame-based processing pipeline
-* 🔊 Preserves original audio
-* 📺 Outputs true UHD (3840×2160)
-* 🧱 Dockerized for portability
-* 📁 SMB-friendly workflow (drop files from Windows)
+* ✅ reliable Vulkan + NVIDIA access
+* ✅ no container runtime quirks
+* ✅ easier debugging
+* ✅ same workflow, fewer moving parts
 
 ---
 
-## 📁 Directory Structure
+## 📁 Directory Layout
 
-Host paths (recommended):
-
-```
-/mnt/leviathan/upscale/
-├── incoming/   # drop files here
+```text
+/mnt/leviathan/data/upscale/
+├── incoming/   # drop files here (SMB target)
 ├── outgoing/   # finished clips
 ├── failed/     # failed jobs
 └── work/       # temp processing
@@ -48,126 +40,184 @@ Host paths (recommended):
 
 ## 🚀 Quick Start
 
-### 1. Clone repo
+### 1. Install dependencies (host)
 
 ```bash
-git clone <your-repo>
-cd dj-pipelinez
+sudo apt update
+sudo apt install ffmpeg inotify-tools
 ```
 
-### 2. Build container
+Ensure NVIDIA drivers are working:
 
 ```bash
-docker compose build
+nvidia-smi
 ```
 
-### 3. Start worker
+Optional (for sanity checks):
 
 ```bash
-docker compose up -d
+sudo apt install vulkan-tools libvulkan1
+vulkaninfo | grep deviceName
 ```
 
-### 4. Drop a clip
+---
 
-Copy a file into:
+### 2. Install Real-ESRGAN
 
+Download and extract:
+
+```bash
+cd /opt
+wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip
+unzip realesrgan-ncnn-vulkan-20220424-ubuntu.zip
 ```
-/mnt/leviathan/upscale/incoming/
+
+Binary path:
+
+```text
+/opt/realesrgan-ncnn-vulkan-20220424-ubuntu/realesrgan-ncnn-vulkan
 ```
 
-or via SMB:
+---
 
+### 3. Place scripts
+
+Put these in:
+
+```text
+/srv/dj-pipelinez/
 ```
+
+Files:
+
+* `watch.sh`
+* `process.sh`
+
+Make executable:
+
+```bash
+chmod +x /srv/dj-pipelinez/*.sh
+```
+
+---
+
+### 4. Run watcher
+
+```bash
+/srv/dj-pipelinez/watch.sh
+```
+
+---
+
+### 5. Drop a clip
+
+Via SMB:
+
+```text
 \\leviathan\upscale-incoming
 ```
 
-### 5. Profit
-
-Upscaled video appears in:
-
-```
-/mnt/leviathan/upscale/outgoing/
-```
-
----
-
-## ⚙️ Configuration
-
-Set via `docker-compose.yml`:
-
-| Variable      | Description       | Default           |
-| ------------- | ----------------- | ----------------- |
-| MODEL_NAME    | Real-ESRGAN model | realesrgan-x4plus |
-| TILE_SIZE     | VRAM tiling size  | 512               |
-| TARGET_WIDTH  | Output width      | 3840              |
-| TARGET_HEIGHT | Output height     | 2160              |
-| CRF           | Video quality     | 17                |
-| PRESET        | Encoding speed    | slow              |
-
----
-
-## 🎬 Pipeline Breakdown
-
-1. Extract frames with ffmpeg
-2. Upscale frames via Real-ESRGAN
-3. Reassemble video
-4. Preserve original audio
-5. Scale/pad to exact 3840×2160
-6. Encode final output
-
----
-
-## 🧪 GPU Support
-
-Requires:
-
-* NVIDIA GPU
-* NVIDIA drivers installed on host
-* NVIDIA Container Toolkit
-
-Verify with:
+Or locally:
 
 ```bash
-docker run --rm --gpus all nvidia/cuda:12.0-base nvidia-smi
+cp video.mp4 /mnt/leviathan/data/upscale/incoming/
 ```
 
 ---
 
-## 📦 Real-ESRGAN Binary
+### 6. Profit
 
-This project uses:
+Output appears in:
 
+```text
+/mnt/leviathan/data/upscale/outgoing/
 ```
-realesrgan-ncnn-vulkan-v0.2.0-ubuntu
+
+---
+
+## 🎬 Pipeline
+
+1. Extract frames with ffmpeg
+2. Upscale frames via Real-ESRGAN (GPU/Vulkan)
+3. Reassemble video
+4. Preserve original audio
+5. Scale/pad to 3840×2160
+6. Encode using **NVENC (GPU)**
+
+---
+
+## ⚙️ Key Settings
+
+Inside `process.sh`:
+
+| Setting               | Description                           |
+| --------------------- | ------------------------------------- |
+| `MODEL_NAME`          | AI model (default: realesrgan-x4plus) |
+| `TILE_SIZE`           | VRAM tiling                           |
+| `TARGET_WIDTH/HEIGHT` | 3840×2160                             |
+| `CQ`                  | NVENC quality (18 default)            |
+| `PRESET`              | NVENC speed (p5 default)              |
+
+---
+
+## 🧪 GPU Acceleration
+
+This pipeline uses GPU for:
+
+* 🔥 AI upscaling (Vulkan)
+* ⚡ video encoding (NVENC)
+
+Verify:
+
+```bash
+watch -n1 nvidia-smi
 ```
 
-Download source:
-https://github.com/xinntao/Real-ESRGAN-ncnn-vulkan/releases
+You should see:
 
-Binary path inside container:
-
-```
-/opt/realesrgan/realesrgan-ncnn-vulkan-v0.2.0-ubuntu/realesrgan-ncnn-vulkan
-```
+* spike during upscale
+* spike during encode
 
 ---
 
 ## ⚠️ Notes
 
-* Processing is frame-based → disk usage spikes during jobs
-* Large clips will take time depending on GPU
-* Output is always forced to UHD resolution
-* Aspect ratio is preserved with padding if needed
+* Frame-based → temporary disk usage can spike
+* Large clips = longer processing time
+* Output is always forced to **true 4K**
+* Aspect ratio preserved with padding
 
 ---
 
-## 🔧 Future Improvements
+## 🔧 Optional: systemd service
 
-* [ ] NVENC encoding (h264_nvenc / hevc_nvenc)
-* [ ] Job queue + concurrency control
-* [ ] Web UI / dashboard
-* [ ] ntfy / webhook notifications
-* [ ] Multi-node scaling (👀 Leviathan cluster)
+Create:
+
+```bash
+/etc/systemd/system/dj-pipelinez.service
+```
+
+```ini
+[Unit]
+Description=DJ Pipelinez Watcher
+After=network.target
+
+[Service]
+ExecStart=/srv/dj-pipelinez/watch.sh
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable:
+
+```bash
+sudo systemctl daemon-reexec
+sudo systemctl enable dj-pipelinez
+sudo systemctl start dj-pipelinez
+```
 
 ---
 
@@ -175,11 +225,11 @@ Binary path inside container:
 
 > Use AI for power, not authorship.
 
-DJ Pipelinez is designed to:
+DJ Pipelinez:
 
-* automate the boring parts
-* preserve creative control
-* keep you in the director’s chair
+* automates the boring parts
+* keeps creative control in your hands
+* stays simple enough to actually maintain
 
 ---
 
@@ -187,11 +237,11 @@ DJ Pipelinez is designed to:
 
 Built by:
 
-* DJ
-* Umaro
+* DJ Pipelinez
+* Chat (Umaro Mode)
 
 ---
 
 ## 📜 License
 
-Do whatever you want, just don’t blame me if you melt your GPU.
+Do whatever you want, just don’t blame Leviathan if it starts breathing fire.
