@@ -72,6 +72,10 @@ ffmpeg -hide_banner -y \
   "$FRAMES/frame_%08d.png"
 
 # 2. Upscale frames on GPU
+TOTAL_FRAMES=$(ls "$FRAMES"/*.png | wc -l)
+echo "[worker] total frames: $TOTAL_FRAMES"
+
+# run upscale in background
 (
   cd "$REALSR_DIR"
   "$REALSR" \
@@ -81,7 +85,19 @@ ffmpeg -hide_banner -y \
     -s 4 \
     -t "$TILE_SIZE" \
     -j "$THREADS"
-)
+) > /dev/null 2>&1 &
+
+UPSCALE_PID=$!
+
+# progress loop
+while kill -0 "$UPSCALE_PID" 2>/dev/null; do
+  DONE=$(ls "$UPSCALED"/*.png 2>/dev/null | wc -l || echo 0)
+  PCT=$(awk "BEGIN { if ($TOTAL_FRAMES > 0) printf \"%.2f\", ($DONE/$TOTAL_FRAMES)*100; else print 0 }")
+  echo "[worker] upscale progress: $DONE / $TOTAL_FRAMES ($PCT%)"
+  sleep 2
+done
+
+wait "$UPSCALE_PID"
 
 # 3. Validate upscale output
 if [[ -z "$(ls -A "$UPSCALED" 2>/dev/null)" ]]; then
