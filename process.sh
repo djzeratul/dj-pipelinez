@@ -50,7 +50,8 @@ ffmpeg -hide_banner -y \
     -o "$UPSCALED" \
     -n realesrgan-x4plus \
     -s 4 \
-    -t 512
+    -t 256 \
+    -j 1:1:1
 )
 
 if [[ -z "$(ls -A "$UPSCALED" 2>/dev/null)" ]]; then
