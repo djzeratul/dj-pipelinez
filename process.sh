@@ -27,7 +27,13 @@ TARGET_W="3840"
 TARGET_H="2160"
 
 LOCKFILE="/mnt/leviathan/data/upscale/work/dj-pipelinez.lock"
+INTERACTIVE_PROGRESS=0
+LAST_PROGRESS_WIDTH=0
 mkdir -p /run
+
+if [[ -t 1 ]]; then
+  INTERACTIVE_PROGRESS=1
+fi
 
 # Global single-worker lock
 exec 9>"$LOCKFILE"
@@ -91,6 +97,30 @@ build_progress_bar() {
   right="$(printf '%*s' "$right_count" '' | tr ' ' '.')"
 
   printf '[%s🦝%s]' "$left" "$right"
+}
+
+print_progress() {
+  local line="$1"
+  local pad=8
+  local width=$(( ${#line} + pad ))
+
+  if [[ "$INTERACTIVE_PROGRESS" -eq 1 ]]; then
+    if [[ "$LAST_PROGRESS_WIDTH" -gt "$width" ]]; then
+      width="$LAST_PROGRESS_WIDTH"
+    fi
+
+    printf '\r%-*s' "$width" "$line"
+    LAST_PROGRESS_WIDTH="$width"
+  else
+    printf '%s\n' "$line"
+  fi
+}
+
+finish_progress_line() {
+  if [[ "$INTERACTIVE_PROGRESS" -eq 1 && "$LAST_PROGRESS_WIDTH" -gt 0 ]]; then
+    printf '\n'
+    LAST_PROGRESS_WIDTH=0
+  fi
 }
 
 JOBDIR="$(mktemp -d "$WORK_ROOT/${STEM}.XXXX")"
@@ -180,13 +210,15 @@ while kill -0 "$UPSCALE_PID" 2>/dev/null; do
   PCT=$(awk "BEGIN { if ($TOTAL_FRAMES > 0) printf \"%.2f\", ($DONE/$TOTAL_FRAMES)*100; else print 0 }")
   BAR="$(build_progress_bar "$DONE" "$TOTAL_FRAMES")"
 
-  printf "[worker] %d / %d (%.2f%%) | %.2f fps | %s ETA: %02d:%02d\n" \
+  printf -v PROGRESS_LINE "[worker] %d / %d (%.2f%%) | %.2f fps | %s ETA: %02d:%02d" \
     "$DONE" "$TOTAL_FRAMES" "$PCT" "$UPSCALE_FPS" "$BAR" \
     $((ETA/60)) $((ETA%60))
+  print_progress "$PROGRESS_LINE"
 
   sleep 2
 done
 
+finish_progress_line
 wait "$UPSCALE_PID"
 
 # 3. Validate upscale output
