@@ -10,7 +10,7 @@ WORK_ROOT="/mnt/leviathan/data/upscale/work"
 OUT_DIR="/mnt/leviathan/data/upscale/outgoing"
 FAIL_DIR="/mnt/leviathan/data/upscale/failed"
 
-REALSR_DIR="/opt/realesrgan-ncnn-vulkan-20220424-ubuntu"
+REALSR_DIR="/opt/realesrgan-ncnn-vulkan"
 REALSR="$REALSR_DIR/realesrgan-ncnn-vulkan"
 
 CQ=18
