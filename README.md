@@ -31,6 +31,7 @@ So this version runs **directly on Leviathan**, which gives:
 ```text
 /mnt/leviathan/data/upscale/
 ├── incoming/   # drop files here (SMB target)
+├── originals/  # claimed source files retained here
 ├── outgoing/   # finished clips
 ├── failed/     # failed jobs
 └── work/       # temp processing
@@ -133,16 +134,23 @@ Output appears in:
 /mnt/leviathan/data/upscale/outgoing/
 ```
 
+Claimed source files are moved out of `incoming/` into:
+
+```text
+/mnt/leviathan/data/upscale/originals/
+```
+
 ---
 
 ## 🎬 Pipeline
 
-1. Extract frames with ffmpeg
-2. Upscale frames via Real-ESRGAN (GPU/Vulkan)
-3. Reassemble video
-4. Preserve original audio
-5. Scale/pad to 3840×2160
-6. Encode using **NVENC (GPU)**
+1. Move the source clip into `originals/` so it is not queued twice
+2. Extract frames with ffmpeg
+3. Upscale frames via Real-ESRGAN (GPU/Vulkan)
+4. Reassemble video
+5. Preserve original audio
+6. Scale/pad to 3840×2160
+7. Encode using **NVENC (GPU)**
 
 ---
 

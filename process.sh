@@ -7,6 +7,7 @@ BASE="$(basename "$INPUT")"
 STEM="${BASE%.*}"
 
 QUEUE_DIR="/mnt/leviathan/data/upscale/incoming"
+ORIGINALS_DIR="/mnt/leviathan/data/upscale/originals"
 WORK_ROOT="/mnt/leviathan/data/upscale/work"
 OUT_DIR="/mnt/leviathan/data/upscale/outgoing"
 FAIL_DIR="/mnt/leviathan/data/upscale/failed"
@@ -38,14 +39,36 @@ if [[ ! -f "$INPUT" ]]; then
   exit 0
 fi
 
-mkdir -p "$WORK_ROOT" "$OUT_DIR" "$FAIL_DIR"
+mkdir -p "$ORIGINALS_DIR" "$WORK_ROOT" "$OUT_DIR" "$FAIL_DIR"
+
+reserve_original_path() {
+  local src="$1"
+  local base ext name candidate n
+
+  base="$(basename "$src")"
+  ext=""
+  name="$base"
+
+  if [[ "$base" == *.* ]]; then
+    ext=".${base##*.}"
+    name="${base%.*}"
+  fi
+
+  candidate="$ORIGINALS_DIR/$base"
+  n=1
+
+  while [[ -e "$candidate" ]]; do
+    candidate="$ORIGINALS_DIR/${name}_$n${ext}"
+    ((n++))
+  done
+
+  printf '%s\n' "$candidate"
+}
 
 JOBDIR="$(mktemp -d "$WORK_ROOT/${STEM}.XXXX")"
 FRAMES="$JOBDIR/frames"
 UPSCALED="$JOBDIR/upscaled"
 mkdir -p "$FRAMES" "$UPSCALED"
-
-INPUT_WORK="$JOBDIR/$BASE"
 
 cleanup() {
   rm -rf "$JOBDIR"
@@ -54,9 +77,11 @@ trap cleanup EXIT
 
 echo "[worker] claiming $INPUT"
 
-# Move file out of queue immediately so it cannot be picked up again
-mv "$INPUT" "$INPUT_WORK"
-INPUT="$INPUT_WORK"
+# Move file out of queue immediately so it cannot be picked up again,
+# but keep a persistent original instead of deleting it with the job dir.
+ORIGINAL_INPUT="$(reserve_original_path "$INPUT")"
+mv "$INPUT" "$ORIGINAL_INPUT"
+INPUT="$ORIGINAL_INPUT"
 
 echo "[worker] processing $INPUT"
 
@@ -132,7 +157,7 @@ wait "$UPSCALE_PID"
 # 3. Validate upscale output
 if [[ -z "$(ls -A "$UPSCALED" 2>/dev/null)" ]]; then
   echo "[worker] upscale failed: no output frames generated"
-  mv "$INPUT" "$FAIL_DIR/" 2>/dev/null || true
+  echo "[worker] original retained at $INPUT"
   exit 1
 fi
 
