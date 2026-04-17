@@ -140,6 +140,8 @@ Claimed source files are moved out of `incoming/` into:
 /mnt/leviathan/data/upscale/originals/
 ```
 
+If an input basename or rendered output name already exists, the pipeline appends a numeric suffix instead of overwriting the older file.
+
 ---
 
 ## 🎬 Pipeline

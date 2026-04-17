@@ -41,11 +41,11 @@ fi
 
 mkdir -p "$ORIGINALS_DIR" "$WORK_ROOT" "$OUT_DIR" "$FAIL_DIR"
 
-reserve_original_path() {
-  local src="$1"
-  local base ext name candidate n
+reserve_unique_path() {
+  local dir="$1"
+  local base="$2"
+  local ext name candidate n
 
-  base="$(basename "$src")"
   ext=""
   name="$base"
 
@@ -54,15 +54,20 @@ reserve_original_path() {
     name="${base%.*}"
   fi
 
-  candidate="$ORIGINALS_DIR/$base"
+  candidate="$dir/$base"
   n=1
 
   while [[ -e "$candidate" ]]; do
-    candidate="$ORIGINALS_DIR/${name}_$n${ext}"
+    candidate="$dir/${name}_$n${ext}"
     ((n++))
   done
 
   printf '%s\n' "$candidate"
+}
+
+count_pngs() {
+  local dir="$1"
+  find "$dir" -maxdepth 1 -type f -name '*.png' | wc -l | tr -d '[:space:]'
 }
 
 JOBDIR="$(mktemp -d "$WORK_ROOT/${STEM}.XXXX")"
@@ -79,13 +84,13 @@ echo "[worker] claiming $INPUT"
 
 # Move file out of queue immediately so it cannot be picked up again,
 # but keep a persistent original instead of deleting it with the job dir.
-ORIGINAL_INPUT="$(reserve_original_path "$INPUT")"
+ORIGINAL_INPUT="$(reserve_unique_path "$ORIGINALS_DIR" "$BASE")"
 mv "$INPUT" "$ORIGINAL_INPUT"
 INPUT="$ORIGINAL_INPUT"
 
 echo "[worker] processing $INPUT"
 
-FPS="$(ffprobe -v error -select_streams v:0 \
+SOURCE_FPS="$(ffprobe -v error -select_streams v:0 \
   -show_entries stream=r_frame_rate \
   -of default=noprint_wrappers=1:nokey=1 "$INPUT" || echo "30/1")"
 
@@ -97,8 +102,14 @@ ffmpeg -hide_banner -y \
   "$FRAMES/frame_%08d.png"
 
 # 2. Upscale frames on GPU
-TOTAL_FRAMES=$(ls "$FRAMES"/*.png | wc -l)
+TOTAL_FRAMES="$(count_pngs "$FRAMES")"
 echo "[worker] total frames: $TOTAL_FRAMES"
+
+if [[ "$TOTAL_FRAMES" -eq 0 ]]; then
+  echo "[worker] extract failed: no frames generated"
+  echo "[worker] original retained at $INPUT"
+  exit 1
+fi
 
 START_TIME=$(date +%s)
 
@@ -129,24 +140,24 @@ UPSCALE_PID=$!
 
 # progress loop
 while kill -0 "$UPSCALE_PID" 2>/dev/null; do
-  DONE=$(ls "$UPSCALED"/*.png 2>/dev/null | wc -l || echo 0)
+  DONE="$(count_pngs "$UPSCALED")"
 
   NOW=$(date +%s)
   ELAPSED=$((NOW - START_TIME))
 
   if [[ "$DONE" -gt 0 && "$ELAPSED" -gt 0 ]]; then
-    FPS=$(awk "BEGIN { printf \"%.2f\", $DONE / $ELAPSED }")
+    UPSCALE_FPS=$(awk "BEGIN { printf \"%.2f\", $DONE / $ELAPSED }")
     REMAINING=$((TOTAL_FRAMES - DONE))
-    ETA=$(awk "BEGIN { if ($FPS > 0) printf \"%.0f\", $REMAINING / $FPS; else print 0 }")
+    ETA=$(awk "BEGIN { if ($UPSCALE_FPS > 0) printf \"%.0f\", $REMAINING / $UPSCALE_FPS; else print 0 }")
   else
-    FPS="0.00"
+    UPSCALE_FPS="0.00"
     ETA=0
   fi
 
   PCT=$(awk "BEGIN { if ($TOTAL_FRAMES > 0) printf \"%.2f\", ($DONE/$TOTAL_FRAMES)*100; else print 0 }")
 
   printf "[worker] %d / %d (%.2f%%) | %.2f fps | ETA: %02d:%02d\n" \
-    "$DONE" "$TOTAL_FRAMES" "$PCT" "$FPS" \
+    "$DONE" "$TOTAL_FRAMES" "$PCT" "$UPSCALE_FPS" \
     $((ETA/60)) $((ETA%60))
 
   sleep 2
@@ -161,12 +172,12 @@ if [[ -z "$(ls -A "$UPSCALED" 2>/dev/null)" ]]; then
   exit 1
 fi
 
-OUT="$OUT_DIR/${STEM}_4k.mp4"
+OUT="$(reserve_unique_path "$OUT_DIR" "${STEM}_4k.mp4")"
 
 # 4. Encode final output with NVENC
 ffmpeg -hide_banner -y \
   -threads 6 \
-  -framerate "$FPS" \
+  -framerate "$SOURCE_FPS" \
   -i "$UPSCALED/frame_%08d.png" \
   -i "$INPUT" \
   -map 0:v:0 \
