@@ -70,6 +70,29 @@ count_pngs() {
   find "$dir" -maxdepth 1 -type f -name '*.png' | wc -l | tr -d '[:space:]'
 }
 
+build_progress_bar() {
+  local done="$1"
+  local total="$2"
+  local width=20
+  local pos left_count right_count left right
+
+  if [[ "$total" -le 0 ]]; then
+    pos=0
+  elif [[ "$done" -ge "$total" ]]; then
+    pos=$((width - 1))
+  else
+    pos=$(( done * (width - 1) / total ))
+  fi
+
+  left_count="$pos"
+  right_count=$((width - pos - 1))
+
+  left="$(printf '%*s' "$left_count" '' | tr ' ' '=')"
+  right="$(printf '%*s' "$right_count" '' | tr ' ' '.')"
+
+  printf '[%s🦝%s]' "$left" "$right"
+}
+
 JOBDIR="$(mktemp -d "$WORK_ROOT/${STEM}.XXXX")"
 FRAMES="$JOBDIR/frames"
 UPSCALED="$JOBDIR/upscaled"
@@ -155,9 +178,10 @@ while kill -0 "$UPSCALE_PID" 2>/dev/null; do
   fi
 
   PCT=$(awk "BEGIN { if ($TOTAL_FRAMES > 0) printf \"%.2f\", ($DONE/$TOTAL_FRAMES)*100; else print 0 }")
+  BAR="$(build_progress_bar "$DONE" "$TOTAL_FRAMES")"
 
-  printf "[worker] %d / %d (%.2f%%) | %.2f fps | ETA: %02d:%02d\n" \
-    "$DONE" "$TOTAL_FRAMES" "$PCT" "$UPSCALE_FPS" \
+  printf "[worker] %d / %d (%.2f%%) | %.2f fps | %s ETA: %02d:%02d\n" \
+    "$DONE" "$TOTAL_FRAMES" "$PCT" "$UPSCALE_FPS" "$BAR" \
     $((ETA/60)) $((ETA%60))
 
   sleep 2
