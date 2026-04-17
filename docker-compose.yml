@@ -28,3 +28,14 @@ services:
       - /mnt/leviathan/data/upscale/failed:/watch/failed
       - /mnt/leviathan/data/upscale/work:/watch/work
       - ./state:/state
+
+      - /usr/share/vulkan/icd.d/nvidia_icd.json:/usr/share/vulkan/icd.d/nvidia_icd.json:ro
+      - /usr/share/vulkan/implicit_layer.d/nvidia_layers.json:/usr/share/vulkan/implicit_layer.d/nvidia_layers.json:ro
+
+      - /usr/lib/x86_64-linux-gnu/libGLX_nvidia.so.0:/usr/lib/x86_64-linux-gnu/libGLX_nvidia.so.0:ro
+      - /usr/lib/x86_64-linux-gnu/libEGL_nvidia.so.0:/usr/lib/x86_64-linux-gnu/libEGL_nvidia.so.0:ro
+
+      - /usr/lib/x86_64-linux-gnu/libnvidia-glsi.so.535.261.03:/usr/lib/x86_64-linux-gnu/libnvidia-glsi.so.535.261.03:ro
+      - /usr/lib/x86_64-linux-gnu/libnvidia-tls.so.535.261.03:/usr/lib/x86_64-linux-gnu/libnvidia-tls.so.535.261.03:ro
+      - /usr/lib/x86_64-linux-gnu/libnvidia-glcore.so.535.261.03:/usr/lib/x86_64-linux-gnu/libnvidia-glcore.so.535.261.03:ro
+      - /usr/lib/x86_64-linux-gnu/libnvidia-glvkspirv.so.535.261.03:/usr/lib/x86_64-linux-gnu/libnvidia-glvkspirv.so.535.261.03:ro
