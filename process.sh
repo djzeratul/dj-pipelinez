@@ -99,6 +99,15 @@ build_progress_bar() {
   printf '[%s🦝%s]' "$left" "$right"
 }
 
+format_duration() {
+  local total_seconds="$1"
+
+  printf '%02d:%02d:%02d' \
+    $((total_seconds / 3600)) \
+    $(((total_seconds % 3600) / 60)) \
+    $((total_seconds % 60))
+}
+
 print_progress() {
   local line="$1"
   local pad=8
@@ -143,6 +152,8 @@ INPUT="$ORIGINAL_INPUT"
 
 echo "[worker] processing $INPUT"
 
+JOB_START_TIME=$(date +%s)
+
 SOURCE_FPS="$(ffprobe -v error -select_streams v:0 \
   -show_entries stream=r_frame_rate \
   -of default=noprint_wrappers=1:nokey=1 "$INPUT" || echo "30/1")"
@@ -164,7 +175,7 @@ if [[ "$TOTAL_FRAMES" -eq 0 ]]; then
   exit 1
 fi
 
-START_TIME=$(date +%s)
+UPSCALE_START_TIME=$(date +%s)
 
 (
   cd "$REALSR_DIR"
@@ -196,7 +207,7 @@ while kill -0 "$UPSCALE_PID" 2>/dev/null; do
   DONE="$(count_pngs "$UPSCALED")"
 
   NOW=$(date +%s)
-  ELAPSED=$((NOW - START_TIME))
+  ELAPSED=$((NOW - UPSCALE_START_TIME))
 
   if [[ "$DONE" -gt 0 && "$ELAPSED" -gt 0 ]]; then
     UPSCALE_FPS=$(awk "BEGIN { printf \"%.2f\", $DONE / $ELAPSED }")
@@ -220,6 +231,9 @@ done
 
 finish_progress_line
 wait "$UPSCALE_PID"
+
+UPSCALE_END_TIME=$(date +%s)
+UPSCALE_ELAPSED=$((UPSCALE_END_TIME - UPSCALE_START_TIME))
 
 # 3. Validate upscale output
 if [[ -z "$(ls -A "$UPSCALED" 2>/dev/null)" ]]; then
@@ -247,4 +261,14 @@ ffmpeg -hide_banner -y \
   -shortest \
   "$OUT"
 
+JOB_END_TIME=$(date +%s)
+TOTAL_ELAPSED=$((JOB_END_TIME - JOB_START_TIME))
+
+if [[ "$UPSCALE_ELAPSED" -gt 0 ]]; then
+  AVG_UPSCALE_FPS=$(awk "BEGIN { printf \"%.2f\", $TOTAL_FRAMES / $UPSCALE_ELAPSED }")
+else
+  AVG_UPSCALE_FPS="0.00"
+fi
+
 echo "[worker] finished -> $OUT"
+echo "[worker] summary | total: $(format_duration "$TOTAL_ELAPSED") | avg upscale: ${AVG_UPSCALE_FPS} fps"
