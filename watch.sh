@@ -15,20 +15,32 @@ is_finished_copy() {
   [[ "$s1" -gt 0 && "$s1" -eq "$s2" ]]
 }
 
-inotifywait -m -e close_write,moved_to --format '%w%f' "$WATCH_DIR" | while read -r file; do
-  [[ -f "$file" ]] || continue
+process_pending() {
+  shopt -s nullglob
 
-  case "$file" in
-    *.mp4|*.mov|*.mkv|*.avi|*.webm)
-      echo "[watcher] detected $file"
-      if is_finished_copy "$file"; then
-        "$PROCESS" "$file" || true
-      else
-        echo "[watcher] skipping incomplete file: $file"
-      fi
-      ;;
-    *)
-      echo "[watcher] ignoring $file"
-      ;;
-  esac
+  for file in "$WATCH_DIR"/*; do
+    [[ -f "$file" ]] || continue
+
+    case "$file" in
+      *.mp4|*.mov|*.mkv|*.avi|*.webm)
+        if is_finished_copy "$file"; then
+          echo "[watcher] found ready file: $file"
+          "$PROCESS" "$file" || true
+        else
+          echo "[watcher] file still copying: $file"
+        fi
+        ;;
+      *)
+        echo "[watcher] ignoring unsupported file: $file"
+        ;;
+    esac
+  done
+}
+
+# Process any files already present when the service starts
+process_pending
+
+# Watch for new/finished copies and then sweep the queue
+inotifywait -m -e close_write,moved_to --format '%w%f' "$WATCH_DIR" | while read -r _; do
+  process_pending
 done
