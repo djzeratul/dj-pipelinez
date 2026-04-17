@@ -75,25 +75,55 @@ ffmpeg -hide_banner -y \
 TOTAL_FRAMES=$(ls "$FRAMES"/*.png | wc -l)
 echo "[worker] total frames: $TOTAL_FRAMES"
 
-# run upscale in background
+START_TIME=$(date +%s)
+
 (
   cd "$REALSR_DIR"
-  "$REALSR" \
-    -i "$FRAMES" \
-    -o "$UPSCALED" \
-    -n "$MODEL_NAME" \
-    -s 4 \
-    -t "$TILE_SIZE" \
-    -j "$THREADS"
-) > /dev/null 2>&1 &
+
+  if [[ "${DEBUG:-0}" == "1" ]]; then
+    "$REALSR" \
+      -i "$FRAMES" \
+      -o "$UPSCALED" \
+      -n "$MODEL_NAME" \
+      -s 4 \
+      -t "$TILE_SIZE" \
+      -j "$THREADS"
+  else
+    "$REALSR" \
+      -i "$FRAMES" \
+      -o "$UPSCALED" \
+      -n "$MODEL_NAME" \
+      -s 4 \
+      -t "$TILE_SIZE" \
+      -j "$THREADS" \
+      > /dev/null 2>&1
+  fi
+) &
 
 UPSCALE_PID=$!
 
 # progress loop
 while kill -0 "$UPSCALE_PID" 2>/dev/null; do
   DONE=$(ls "$UPSCALED"/*.png 2>/dev/null | wc -l || echo 0)
+
+  NOW=$(date +%s)
+  ELAPSED=$((NOW - START_TIME))
+
+  if [[ "$DONE" -gt 0 && "$ELAPSED" -gt 0 ]]; then
+    FPS=$(awk "BEGIN { printf \"%.2f\", $DONE / $ELAPSED }")
+    REMAINING=$((TOTAL_FRAMES - DONE))
+    ETA=$(awk "BEGIN { if ($FPS > 0) printf \"%.0f\", $REMAINING / $FPS; else print 0 }")
+  else
+    FPS="0.00"
+    ETA=0
+  fi
+
   PCT=$(awk "BEGIN { if ($TOTAL_FRAMES > 0) printf \"%.2f\", ($DONE/$TOTAL_FRAMES)*100; else print 0 }")
-  echo "[worker] upscale progress: $DONE / $TOTAL_FRAMES ($PCT%)"
+
+  printf "[worker] %d / %d (%.2f%%) | %.2f fps | ETA: %02d:%02d\n" \
+    "$DONE" "$TOTAL_FRAMES" "$PCT" "$FPS" \
+    $((ETA/60)) $((ETA%60))
+
   sleep 2
 done
 
