@@ -198,10 +198,9 @@ DJ Pipelinez:
     stays simple enough to actually maintain
 
 # 😄 Credits
-
 Built by:
-    DJ
-    Umaro
+ - DJ
+ - Umaro
 
 # 📜 License
 
