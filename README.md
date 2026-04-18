@@ -247,8 +247,8 @@ DJ Pipelinez:
 
 Built by:
 
-* DJ Pipelinez
-* Chat (Umaro Mode)
+* DJ
+* Umaro
 
 ---
 
