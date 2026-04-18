@@ -1,257 +1,179 @@
-# 🎛️ DJ Pipelinez (Host Mode)
+# DJ Pipelinez
 
-Automated AI video upscaling pipeline using **Real-ESRGAN + ffmpeg (NVENC)** — now running **natively on the host** for maximum GPU compatibility and minimal runtime headaches.
+Automated AI video upscaling pipeline using Real-ESRGAN and ffmpeg with NVENC.
 
-Drop clips into a folder (via SMB or local), and they’ll be automatically:
-
-* processed
-* AI upscaled
-* exported as **true 4K (3840×2160)**
-* with original audio preserved
-
----
-
-## 🧠 Why Host Mode?
-
-After testing Docker-based GPU/Vulkan pipelines, it turned out:
-
-> GPU/Vulkan + containers = more plumbing than value (for this use case)
-
-So this version runs **directly on Leviathan**, which gives:
-
-* ✅ reliable Vulkan + NVIDIA access
-* ✅ no container runtime quirks
-* ✅ easier debugging
-* ✅ same workflow, fewer moving parts
-
----
-
-## 📁 Directory Layout
+This repo now keeps both platform variants side by side:
 
 ```text
-/mnt/leviathan/data/upscale/
-├── incoming/   # drop files here (SMB target)
-├── originals/  # claimed source files retained here
-├── outgoing/   # finished clips
-├── failed/     # failed jobs
-└── work/       # temp processing
+scripts/
+├── linux/
+│   ├── watch.sh
+│   └── process.sh
+└── windows/
+    ├── watch.ps1
+    └── process.ps1
 ```
 
----
+`scripts/linux/` is the original Linux host workflow.
 
-## 🚀 Quick Start
+`scripts/windows/` is the native PowerShell port for Windows.
 
-### 1. Install dependencies (host)
+## Recommended Convention
+
+For this repo, `scripts/<platform>/` is the cleanest convention.
+
+- It keeps the entrypoints grouped by operating system.
+- It avoids ambiguous root-level duplicates like `watch.sh` and `watch.ps1`.
+- It leaves room for future platform-specific extras such as `systemd/`, Task Scheduler examples, or install helpers.
+
+If the repo grows beyond scripts, a good next step would be:
+
+```text
+deploy/
+├── linux/
+└── windows/
+```
+
+But for the current size, `scripts/<platform>/` is enough.
+
+## What The Pipeline Does
+
+Both variants follow the same basic flow:
+
+1. Watch an `incoming` directory
+2. Wait until the copied file appears stable
+3. Move the source clip out of the queue so it is not processed twice
+4. Extract frames with ffmpeg
+5. Upscale frames with Real-ESRGAN
+6. Reassemble the final video as 3840x2160
+7. Preserve original audio when present
+
+## Linux
+
+Linux scripts live in `scripts/linux/watch.sh` and `scripts/linux/process.sh`.
+
+They keep the original host-oriented assumptions:
+
+- queue root under `/mnt/leviathan/data/upscale/`
+- Real-ESRGAN under `/opt/realesrgan-ncnn-vulkan`
+- deployed runtime script path `/srv/dj-pipelinez/process.sh`
+- file watching via `inotifywait`
+- single-worker locking via `flock`
+
+Typical deployment still looks like this:
 
 ```bash
 sudo apt update
 sudo apt install ffmpeg inotify-tools
 ```
 
-Ensure NVIDIA drivers are working:
-
-```bash
-nvidia-smi
-```
-
-Optional (for sanity checks):
-
-```bash
-sudo apt install vulkan-tools libvulkan1
-vulkaninfo | grep deviceName
-```
-
----
-
-### 2. Install Real-ESRGAN
-
-Download and extract:
-
-```bash
-cd /opt
-wget https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-ubuntu.zip
-unzip realesrgan-ncnn-vulkan-20220424-ubuntu.zip
-```
-
-Binary path:
-
-```text
-/opt/realesrgan-ncnn-vulkan-20220424-ubuntu/realesrgan-ncnn-vulkan
-```
-
----
-
-### 3. Place scripts
-
-Put these in:
-
-```text
-/srv/dj-pipelinez/
-```
-
-Files:
-
-* `watch.sh`
-* `process.sh`
-
-Make executable:
-
-```bash
-chmod +x /srv/dj-pipelinez/*.sh
-```
-
----
-
-### 4. Run watcher
+Copy the Linux scripts to `/srv/dj-pipelinez/`, make them executable, and run:
 
 ```bash
 /srv/dj-pipelinez/watch.sh
 ```
 
----
+## Windows
 
-### 5. Drop a clip
+Windows scripts live in `scripts/windows/watch.ps1` and `scripts/windows/process.ps1`.
 
-Via SMB:
+### Windows Dependencies
+
+You need:
+
+1. NVIDIA drivers with NVENC support
+2. `ffmpeg.exe` and `ffprobe.exe`
+3. `realesrgan-ncnn-vulkan.exe`
+4. PowerShell 7 (`pwsh`) recommended
+
+Sanity checks:
+
+```powershell
+nvidia-smi
+ffmpeg -hide_banner -encoders | Select-String hevc_nvenc
+```
+
+### Wiring Dependencies on Windows
+
+The scripts support either `PATH`-based discovery or explicit environment variables.
+
+If the tools are on `PATH`, these should resolve:
+
+```powershell
+ffmpeg
+ffprobe
+realesrgan-ncnn-vulkan
+```
+
+If you prefer explicit paths:
+
+```powershell
+$env:FFMPEG_EXE = "C:\Tools\ffmpeg\bin\ffmpeg.exe"
+$env:FFPROBE_EXE = "C:\Tools\ffmpeg\bin\ffprobe.exe"
+$env:DJ_PIPELINEZ_REALSR_EXE = "C:\Tools\realesrgan-ncnn-vulkan\realesrgan-ncnn-vulkan.exe"
+$env:DJ_PIPELINEZ_DATA_ROOT = "D:\dj-pipelinez"
+```
+
+Persist them if you want:
+
+```powershell
+setx FFMPEG_EXE "C:\Tools\ffmpeg\bin\ffmpeg.exe"
+setx FFPROBE_EXE "C:\Tools\ffmpeg\bin\ffprobe.exe"
+setx DJ_PIPELINEZ_REALSR_EXE "C:\Tools\realesrgan-ncnn-vulkan\realesrgan-ncnn-vulkan.exe"
+setx DJ_PIPELINEZ_DATA_ROOT "D:\dj-pipelinez"
+```
+
+Open a new terminal after `setx`.
+
+### Windows Defaults
+
+If `DJ_PIPELINEZ_DATA_ROOT` is not set, the Windows scripts use:
 
 ```text
-\\leviathan\upscale-incoming
+state\upscale\
+├── incoming\
+├── originals\
+├── outgoing\
+├── failed\
+└── work\
 ```
 
-Or locally:
+relative to the repo root.
 
-```bash
-cp video.mp4 /mnt/leviathan/data/upscale/incoming/
+### Run The Windows Watcher
+
+From the repo root:
+
+```powershell
+pwsh -NoProfile -File .\scripts\windows\watch.ps1
 ```
 
----
+Example input copy:
 
-### 6. Profit
-
-Output appears in:
-
-```text
-/mnt/leviathan/data/upscale/outgoing/
+```powershell
+Copy-Item "C:\clips\video.mp4" ".\state\upscale\incoming\"
 ```
 
-Claimed source files are moved out of `incoming/` into:
+If `DJ_PIPELINEZ_DATA_ROOT` is set, use that root's `incoming` directory instead.
 
-```text
-/mnt/leviathan/data/upscale/originals/
-```
+### Windows Tunables
 
-If an input basename or rendered output name already exists, the pipeline appends a numeric suffix instead of overwriting the older file.
+`scripts/windows/process.ps1` reads these environment variables:
 
----
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DJ_PIPELINEZ_MODEL_NAME` | `realesrgan-x4plus` | Real-ESRGAN model name |
+| `DJ_PIPELINEZ_TILE_SIZE` | `256` | Tile size for VRAM pressure |
+| `DJ_PIPELINEZ_THREADS` | `1:1:1` | Real-ESRGAN thread tuple |
+| `DJ_PIPELINEZ_CQ` | `18` | NVENC constant quality |
+| `DJ_PIPELINEZ_PRESET` | `p5` | NVENC preset |
+| `DJ_PIPELINEZ_TARGET_WIDTH` | `3840` | Final output width |
+| `DJ_PIPELINEZ_TARGET_HEIGHT` | `2160` | Final output height |
+| `DJ_PIPELINEZ_WATCH_DIR` | `<data root>\incoming` | Override only the watched folder |
 
-## 🎬 Pipeline
+## Notes
 
-1. Move the source clip into `originals/` so it is not queued twice
-2. Extract frames with ffmpeg
-3. Upscale frames via Real-ESRGAN (GPU/Vulkan)
-4. Reassemble video
-5. Preserve original audio
-6. Scale/pad to 3840×2160
-7. Encode using **NVENC (GPU)**
-
----
-
-## ⚙️ Key Settings
-
-Inside `process.sh`:
-
-| Setting               | Description                           |
-| --------------------- | ------------------------------------- |
-| `MODEL_NAME`          | AI model (default: realesrgan-x4plus) |
-| `TILE_SIZE`           | VRAM tiling                           |
-| `TARGET_WIDTH/HEIGHT` | 3840×2160                             |
-| `CQ`                  | NVENC quality (18 default)            |
-| `PRESET`              | NVENC speed (p5 default)              |
-
----
-
-## 🧪 GPU Acceleration
-
-This pipeline uses GPU for:
-
-* 🔥 AI upscaling (Vulkan)
-* ⚡ video encoding (NVENC)
-
-Verify:
-
-```bash
-watch -n1 nvidia-smi
-```
-
-You should see:
-
-* spike during upscale
-* spike during encode
-
----
-
-## ⚠️ Notes
-
-* Frame-based → temporary disk usage can spike
-* Large clips = longer processing time
-* Output is always forced to **true 4K**
-* Aspect ratio preserved with padding
-
----
-
-## 🔧 Optional: systemd service
-
-Create:
-
-```bash
-/etc/systemd/system/dj-pipelinez.service
-```
-
-```ini
-[Unit]
-Description=DJ Pipelinez Watcher
-After=network.target
-
-[Service]
-ExecStart=/srv/dj-pipelinez/watch.sh
-Restart=always
-User=root
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable:
-
-```bash
-sudo systemctl daemon-reexec
-sudo systemctl enable dj-pipelinez
-sudo systemctl start dj-pipelinez
-```
-
----
-
-## 🎛️ Philosophy
-
-> Use AI for power, not authorship.
-
-DJ Pipelinez:
-
-* automates the boring parts
-* keeps creative control in your hands
-* stays simple enough to actually maintain
-
----
-
-## 😄 Credits
-
-Built by:
-
-* DJ Pipelinez
-* Chat (Umaro Mode)
-
----
-
-## 📜 License
-
-Do whatever you want, just don’t blame Leviathan if it starts breathing fire.
+- Linux and Windows now live side by side without changing the Linux runtime behavior.
+- The Windows watcher uses `FileSystemWatcher` plus a size stability check.
+- The Windows processor uses a named mutex so only one clip is processed at a time.
+- Output remains padded or scaled to true 4K while preserving aspect ratio.
