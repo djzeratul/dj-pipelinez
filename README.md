@@ -18,24 +18,6 @@ scripts/
 
 `scripts/windows/` is the native PowerShell port for Windows.
 
-## Recommended Convention
-
-For this repo, `scripts/<platform>/` is the cleanest convention.
-
-- It keeps the entrypoints grouped by operating system.
-- It avoids ambiguous root-level duplicates like `watch.sh` and `watch.ps1`.
-- It leaves room for future platform-specific extras such as `systemd/`, Task Scheduler examples, or install helpers.
-
-If the repo grows beyond scripts, a good next step would be:
-
-```text
-deploy/
-├── linux/
-└── windows/
-```
-
-But for the current size, `scripts/<platform>/` is enough.
-
 ## What The Pipeline Does
 
 Both variants follow the same basic flow:
@@ -60,7 +42,7 @@ They keep the original host-oriented assumptions:
 - file watching via `inotifywait`
 - single-worker locking via `flock`
 
-Typical deployment still looks like this:
+Typical deployment looks like this:
 
 ```bash
 sudo apt update
