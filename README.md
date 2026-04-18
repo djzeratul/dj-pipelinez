@@ -38,7 +38,7 @@ They keep the original host-oriented assumptions:
 
 - queue root under `/mnt/leviathan/data/upscale/`
 - Real-ESRGAN under `/opt/realesrgan-ncnn-vulkan`
-- deployed runtime script path `/srv/dj-pipelinez/process.sh`
+- deployed runtime script path `/srv/dj-pipelinez/scripts/linux/process.sh`
 - file watching via `inotifywait`
 - single-worker locking via `flock`
 
@@ -49,10 +49,37 @@ sudo apt update
 sudo apt install ffmpeg inotify-tools
 ```
 
-Copy the Linux scripts to `/srv/dj-pipelinez/`, make them executable, and run:
+Copy the Linux scripts to `/srv/dj-pipelinez/scripts/linux/`, make them executable, and run:
 
 ```bash
-/srv/dj-pipelinez/watch.sh
+/srv/dj-pipelinez/scripts/linux/watch.sh
+```
+
+### Linux `systemd` Update
+
+If you already had a service pointing at the old root-level script, update `ExecStart` to the new deployed path.
+
+Example unit:
+
+```ini
+[Unit]
+Description=DJ Pipelinez Watcher
+After=network.target
+
+[Service]
+ExecStart=/srv/dj-pipelinez/scripts/linux/watch.sh
+Restart=always
+User=root
+
+[Install]
+WantedBy=multi-user.target
+```
+
+After editing the service:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart dj-pipelinez
 ```
 
 ## Windows

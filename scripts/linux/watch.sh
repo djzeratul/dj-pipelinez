@@ -2,7 +2,7 @@
 set -euo pipefail
 
 WATCH_DIR="/mnt/leviathan/data/upscale/incoming"
-PROCESS="/srv/dj-pipelinez/process.sh"
+PROCESS="/srv/dj-pipelinez/scripts/linux/process.sh"
 
 echo "[watcher] watching $WATCH_DIR"
 
