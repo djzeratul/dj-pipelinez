@@ -86,6 +86,29 @@ function Format-Duration {
     return [TimeSpan]::FromSeconds([Math]::Max(0, $TotalSeconds)).ToString("hh\:mm\:ss")
 }
 
+function Format-Eta {
+    param(
+        [Parameter(Mandatory = $true)]
+        [int]$TotalSeconds
+    )
+
+    $seconds = [Math]::Max(0, $TotalSeconds)
+
+    if ($seconds -lt 60) {
+        return "{0}s" -f $seconds
+    }
+
+    if ($seconds -lt 3600) {
+        return "{0}m {1:D2}s" -f [Math]::Floor($seconds / 60), ($seconds % 60)
+    }
+
+    if ($seconds -lt 86400) {
+        return "{0}h {1:D2}m" -f [Math]::Floor($seconds / 3600), [Math]::Floor(($seconds % 3600) / 60)
+    }
+
+    return "{0}d {1:D2}h" -f [Math]::Floor($seconds / 86400), [Math]::Floor(($seconds % 86400) / 3600)
+}
+
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent (Split-Path -Parent $scriptRoot)
 $dataRoot = if ($env:DJ_PIPELINEZ_DATA_ROOT) {
@@ -228,7 +251,7 @@ try {
             0
         }
 
-        $status = "{0} / {1} | {2:N2} fps | ETA {3}" -f $done, $totalFrames, $upscaleFps, (Format-Duration -TotalSeconds $etaSeconds)
+        $status = "{0} / {1} | {2:N2} fps | ETA {3}" -f $done, $totalFrames, $upscaleFps, (Format-Eta -TotalSeconds $etaSeconds)
         Write-Progress -Activity "Upscaling frames" -Status $status -PercentComplete $percentComplete
     }
 

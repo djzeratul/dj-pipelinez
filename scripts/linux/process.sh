@@ -108,6 +108,33 @@ format_duration() {
     $((total_seconds % 60))
 }
 
+format_eta() {
+  local total_seconds="$1"
+
+  if [[ "$total_seconds" -lt 60 ]]; then
+    printf '%ss' "$total_seconds"
+    return
+  fi
+
+  if [[ "$total_seconds" -lt 3600 ]]; then
+    printf '%dm %02ds' \
+      $((total_seconds / 60)) \
+      $((total_seconds % 60))
+    return
+  fi
+
+  if [[ "$total_seconds" -lt 86400 ]]; then
+    printf '%dh %02dm' \
+      $((total_seconds / 3600)) \
+      $(((total_seconds % 3600) / 60))
+    return
+  fi
+
+  printf '%dd %02dh' \
+    $((total_seconds / 86400)) \
+    $(((total_seconds % 86400) / 3600))
+}
+
 print_progress() {
   local line="$1"
   local pad=8
@@ -221,9 +248,9 @@ while kill -0 "$UPSCALE_PID" 2>/dev/null; do
   PCT=$(awk "BEGIN { if ($TOTAL_FRAMES > 0) printf \"%.2f\", ($DONE/$TOTAL_FRAMES)*100; else print 0 }")
   BAR="$(build_progress_bar "$DONE" "$TOTAL_FRAMES")"
 
-  printf -v PROGRESS_LINE "[worker] %d / %d (%.2f%%) | %.2f fps | %s ETA: %02d:%02d" \
+  printf -v PROGRESS_LINE "[worker] %d / %d (%.2f%%) | %.2f fps | %s ETA: %s" \
     "$DONE" "$TOTAL_FRAMES" "$PCT" "$UPSCALE_FPS" "$BAR" \
-    $((ETA/60)) $((ETA%60))
+    "$(format_eta "$ETA")"
   print_progress "$PROGRESS_LINE"
 
   sleep 2
