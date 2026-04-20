@@ -186,3 +186,23 @@ If `DJ_PIPELINEZ_DATA_ROOT` is set, use that root's `incoming` directory instead
 - The Windows watcher uses `FileSystemWatcher` plus a size stability check.
 - The Windows processor uses a named mutex so only one clip is processed at a time.
 - Output remains padded or scaled to true 4K while preserving aspect ratio.
+
+#  🎛️ Philosophy
+
+    Use AI for power, not authorship.
+
+DJ Pipelinez:
+
+    automates the boring parts
+    keeps creative control in your hands
+    stays simple enough to actually maintain
+
+# 😄 Credits
+Built by:
+ - DJ
+ - Umaro
+
+# 📜 License
+
+Do whatever you want, just don’t blame Leviathan if it starts breathing fire.
+
