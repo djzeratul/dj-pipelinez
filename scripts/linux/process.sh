@@ -17,8 +17,8 @@ REALSR="$REALSR_DIR/realesrgan-ncnn-vulkan"
 
 # Conservative stable defaults for GTX 1080 Ti
 MODEL_NAME="realesrgan-x4plus"
-TILE_SIZE="256"
-THREADS="1:1:1"
+TILE_SIZE="512"
+THREADS="1:1:2"
 
 CQ="18"
 PRESET="p5"
